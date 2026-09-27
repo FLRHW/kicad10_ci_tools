@@ -1,0 +1,30 @@
+name: Mirror tested KiBot image
+
+on:
+  push:
+    paths:
+      - .github/workflows/mirror-image.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  mirror:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Copy tested image to my registry
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          source_image="ghcr.io/inti-cmnb/kicad10_auto_full@sha256:dd3b846da945f204fa7b61916df34a99170b2a2095b49c3879cd96d414b8a7b8"
+          my_image="ghcr.io/flrhw/kibot-kicad10:1.9.1-tested"
+
+          echo "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          docker pull "$source_image"
+          docker tag "$source_image" "$my_image"
+          docker push "$my_image"
