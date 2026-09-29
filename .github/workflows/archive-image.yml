@@ -1,0 +1,53 @@
+name: Archive tested KiBot image
+
+on:
+  push:
+    paths:
+      - .github/workflows/archive-image.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  archive:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: Save image and prepare checksums
+        run: |
+          set -euo pipefail
+
+          image="ghcr.io/flrhw/kibot-kicad10@sha256:dd3b846da945f204fa7b61916df34a99170b2a2095b49c3879cd96d414b8a7b8"
+          base="kibot-kicad10-1.9.1.tar.gz"
+
+          docker pull "$image"
+          docker tag "$image" kibot-kicad10-backup:1.9.1
+
+          docker save kibot-kicad10-backup:1.9.1 |
+            gzip -1 |
+            split -b 1000M -d -a 3 - "$base.part-"
+
+          sha256sum "$base".part-* > "$base.parts.sha256"
+          cat "$base".part-* |
+            sha256sum |
+            sed "s/  -$/  $base/" > "$base.sha256"
+
+          ls -lh "$base".part-* "$base.parts.sha256" "$base.sha256"
+
+      - name: Publish backup as a GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          base="kibot-kicad10-1.9.1.tar.gz"
+
+          gh release create kibot-1.9.1-kicad-10.0.5 \
+            "$base".part-* \
+            "$base.parts.sha256" \
+            "$base.sha256" \
+            --target main \
+            --title "KiBot 1.9.1 and KiCad 10.0.5 image backup" \
+            --notes "Backup of the tested linux/amd64 container image. Download all parts and checksum files before reconstructing the archive."
